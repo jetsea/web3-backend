@@ -19,6 +19,7 @@ type Result struct {
 	Err      error
 }
 
+// String() implements fmt.Stringer.
 func (r Result) String() string {
 	if r.Err != nil {
 		return fmt.Sprintf("ERROR %s: %v", r.URL, r.Err)

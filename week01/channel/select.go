@@ -27,22 +27,6 @@ func NonBlocking(ch <-chan int) (int, bool) {
 	}
 }
 
-// FirstOf sends to the first channel that is ready among targets.
-// Useful for broadcasting with backpressure avoidance.
-func FirstOf(value int, targets ...chan<- int) {
-	cases := make([]chan<- int, len(targets))
-	copy(cases, targets)
-
-	// Build select dynamically via a loop+default trick.
-	for _, ch := range cases {
-		select {
-		case ch <- value:
-			return
-		default:
-		}
-	}
-}
-
 // WithDeadline listens on work and returns values until ctx is done.
 // It also applies a per-receive timeout via time.After.
 func WithDeadline(ctx context.Context, work <-chan int, perItemTimeout time.Duration) []int {

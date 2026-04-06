@@ -28,7 +28,7 @@ func TestSlowOperation_Timeout(t *testing.T) {
 }
 
 func TestTimeoutWrapper_Completes(t *testing.T) {
-	err := TimeoutWrapper(100*time.Millisecond, func(ctx context.Context) error {
+	err := TimeoutWrapper(20*time.Millisecond, func(ctx context.Context) error {
 		return SlowOperation(ctx, 10*time.Millisecond)
 	})
 	if err != nil {
@@ -38,7 +38,7 @@ func TestTimeoutWrapper_Completes(t *testing.T) {
 
 func TestTimeoutWrapper_Exceeded(t *testing.T) {
 	err := TimeoutWrapper(10*time.Millisecond, func(ctx context.Context) error {
-		return SlowOperation(ctx, 200*time.Millisecond)
+		return SlowOperation(ctx, 20*time.Millisecond)
 	})
 	if !IsTimeout(err) {
 		t.Errorf("expected DeadlineExceeded, got %v", err)

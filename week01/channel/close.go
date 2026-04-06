@@ -1,7 +1,6 @@
 package channel
 
-// Generate sends integers 0, 1, 2, … into the returned channel
-// until the done channel is closed, then closes the output channel.
+// Push value into a channel unlimitedly until outside closes the channel.
 func Generate(done <-chan struct{}) <-chan int {
 	out := make(chan int)
 	go func() {
@@ -17,20 +16,7 @@ func Generate(done <-chan struct{}) <-chan int {
 	return out
 }
 
-// Take reads at most n values from src and returns them.
-func Take(src <-chan int, n int) []int {
-	result := make([]int, 0, n)
-	for v := range src {
-		result = append(result, v)
-		if len(result) == n {
-			break
-		}
-	}
-	return result
-}
-
-// Producer sends values into a channel, then closes it.
-// Demonstrates the "only the sender closes" convention.
+// Push all values from the slice into a channel, then close it.
 func Producer(values []int) <-chan int {
 	ch := make(chan int, len(values))
 	go func() {
@@ -42,8 +28,19 @@ func Producer(values []int) <-chan int {
 	return ch
 }
 
-// Consumer reads all values from ch using a range loop.
-// range automatically exits when the channel is closed.
+// Take reads at most n values from src and returns them as slice.
+func Take(src <-chan int, n int) []int {
+	result := make([]int, 0, n)
+	for v := range src {
+		result = append(result, v)
+		if len(result) == n {
+			break
+		}
+	}
+	return result
+}
+
+// Take all values from the channel until it's closed, and return them as slice.
 func Consumer(ch <-chan int) []int {
 	var result []int
 	for v := range ch {

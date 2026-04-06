@@ -22,14 +22,3 @@ func TestBoundedProducer(t *testing.T) {
 		t.Fatalf("len = %d, want 10", len(got))
 	}
 }
-
-func TestBuffered_NeverBlocks(t *testing.T) {
-	// Sends to a full channel should block, but filling up to capacity should not.
-	ch := make(chan int, 3)
-	ch <- 1
-	ch <- 2
-	ch <- 3
-	// At this point the buffer is full.  Reading one slot should unblock a send.
-	<-ch
-	ch <- 4 // should not block
-}

@@ -1,6 +1,9 @@
 package channel
 
-import "testing"
+import (
+	"log/slog"
+	"testing"
+)
 
 func TestSendAndReceive(t *testing.T) {
 	got := SendAndReceive(42)
@@ -20,6 +23,7 @@ func TestPipeline(t *testing.T) {
 	}
 	for _, tt := range tests {
 		got := Pipeline(tt.input)
+		slog.Info("Pipeline result", "input", tt.input, "result", got)
 		if got != tt.want {
 			t.Errorf("Pipeline(%d) = %d, want %d", tt.input, got, tt.want)
 		}

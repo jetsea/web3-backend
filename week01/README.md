@@ -66,8 +66,8 @@ go run exercises/crawler/crawler.go
 go run exercises/http_server/server.go
 
 # Get code coverage
-go test ./... -coverprofile=coverage.out
-# View coverage
+go test ./... -coverprofile=coverage
+# View detail coverage(every function)
 go tool cover -func coverage
 ```
 

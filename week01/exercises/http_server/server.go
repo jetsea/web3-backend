@@ -24,23 +24,9 @@ func SlowHandler(operationDuration time.Duration) http.HandlerFunc {
 	}
 }
 
-// HealthHandler always responds 200 OK immediately.
-func HealthHandler(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	fmt.Fprintln(w, "ok")
-}
-
-// EchoHandler echoes the query parameter "msg".
-func EchoHandler(w http.ResponseWriter, r *http.Request) {
-	msg := r.URL.Query().Get("msg")
-	fmt.Fprintln(w, msg)
-}
-
 // NewServer builds and returns a configured *http.Server.
 func NewServer(addr string, readTimeout, writeTimeout time.Duration) *http.Server {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/health", HealthHandler)
-	mux.HandleFunc("/echo", EchoHandler)
 	mux.HandleFunc("/slow", SlowHandler(5*time.Second))
 
 	return &http.Server{
@@ -55,10 +41,12 @@ func NewServer(addr string, readTimeout, writeTimeout time.Duration) *http.Serve
 func RunWithContext(ctx context.Context, srv *http.Server) error {
 	errCh := make(chan error, 1)
 	go func() {
+		//when srv shuts down, or port is already in use, or other error occurs, ListenAndServe will return a non-nil error, which we send to errCh
 		errCh <- srv.ListenAndServe()
 	}()
 
 	select {
+	//1.port is already in use 2. invalid addr 3. permission denied 4. server crashes 5. memory leak 6. srv.Close() is called 7. srv.Shutdown() is called outside.
 	case err := <-errCh:
 		return err
 	case <-ctx.Done():

@@ -8,43 +8,6 @@ import (
 	"time"
 )
 
-func TestHealthHandler(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/health", nil)
-	w := httptest.NewRecorder()
-
-	HealthHandler(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
-	}
-	if w.Body.String() != "ok\n" {
-		t.Errorf("body = %q, want %q", w.Body.String(), "ok\n")
-	}
-}
-
-func TestEchoHandler(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/echo?msg=hello", nil)
-	w := httptest.NewRecorder()
-
-	EchoHandler(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
-	}
-	if w.Body.String() != "hello\n" {
-		t.Errorf("body = %q, want %q", w.Body.String(), "hello\n")
-	}
-}
-
-func TestEchoHandler_EmptyMsg(t *testing.T) {
-	req := httptest.NewRequest(http.MethodGet, "/echo", nil)
-	w := httptest.NewRecorder()
-	EchoHandler(w, req)
-	if w.Code != http.StatusOK {
-		t.Errorf("status = %d, want 200", w.Code)
-	}
-}
-
 func TestSlowHandler_Completes(t *testing.T) {
 	handler := SlowHandler(10 * time.Millisecond)
 	req := httptest.NewRequest(http.MethodGet, "/slow", nil)
@@ -76,31 +39,46 @@ func TestSlowHandler_ClientDisconnects(t *testing.T) {
 	}
 }
 
-func TestNewServer_Config(t *testing.T) {
+func TestRunWithContext_NormalShutdown(t *testing.T) {
+	// Create server with random port
 	srv := NewServer(":0", 5*time.Second, 10*time.Second)
-	if srv == nil {
-		t.Fatal("expected non-nil server")
-	}
-	if srv.ReadTimeout != 5*time.Second {
-		t.Errorf("ReadTimeout = %v, want 5s", srv.ReadTimeout)
-	}
-	if srv.WriteTimeout != 10*time.Second {
-		t.Errorf("WriteTimeout = %v, want 10s", srv.WriteTimeout)
+
+	// Create context that will be cancelled
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel() //reasure that cancel is called to avoid context leak in case of test failure
+
+	// Run server in a goroutine
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- RunWithContext(ctx, srv)
+	}()
+
+	// Allow server to start
+	time.Sleep(100 * time.Millisecond)
+
+	// Cancel context to trigger shutdown
+	cancel()
+
+	// Wait for server to shutdown
+	err := <-errCh
+	t.Log(err)
+	if err != nil && err != http.ErrServerClosed {
+		t.Errorf("unexpected error: %v", err)
 	}
 }
 
-func TestNewServer_Routes(t *testing.T) {
-	srv := NewServer(":0", 5*time.Second, 10*time.Second)
-	ts := httptest.NewServer(srv.Handler)
-	defer ts.Close()
+func TestRunWithContext_Error(t *testing.T) {
+	// Create server with an invalid address
+	srv := NewServer("invalid-address", 5*time.Second, 10*time.Second)
 
-	resp, err := ts.Client().Get(ts.URL + "/health")
-	if err != nil {
-		t.Fatalf("GET /health: %v", err)
-	}
-	defer resp.Body.Close()
+	// Create context
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
 
-	if resp.StatusCode != http.StatusOK {
-		t.Errorf("status = %d, want 200", resp.StatusCode)
+	// Run server
+	err := RunWithContext(ctx, srv)
+	t.Log(err)
+	if err == nil {
+		t.Error("expected error, got nil")
 	}
 }

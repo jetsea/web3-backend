@@ -6,10 +6,10 @@ import (
 )
 
 func TestWithUserID(t *testing.T) {
-	ctx := WithUserID(context.Background(), "user-42")
+	ctx := WithUserID(context.Background(), "jack")
 	got, ok := UserIDFrom(ctx)
-	if !ok || got != "user-42" {
-		t.Errorf("UserIDFrom = (%q, %v), want (\"user-42\", true)", got, ok)
+	if !ok || got != "jack" {
+		t.Errorf("UserIDFrom = (%q, %v), want (\"jack\", true)", got, ok)
 	}
 }
 
@@ -45,8 +45,8 @@ func TestBuildRequestContext(t *testing.T) {
 func TestLogFields(t *testing.T) {
 	ctx := BuildRequestContext(context.Background(), "alice", "r-99", "t-1")
 	fields := LogFields(ctx)
-	if fields == "" {
-		t.Error("LogFields should not be empty")
+	if fields != "userID=alice requestID=r-99" {
+		t.Error("LogFields are incorrect")
 	}
 }
 

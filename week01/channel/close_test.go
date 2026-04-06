@@ -17,6 +17,23 @@ func TestProducerConsumer(t *testing.T) {
 	}
 }
 
+func TestGenerate_Take(t *testing.T) {
+	done := make(chan struct{})
+	nums := Generate(done)
+
+	got := Take(nums, 5)
+	close(done)
+
+	if len(got) != 5 {
+		t.Fatalf("Take returned %d items, want 5", len(got))
+	}
+	for i, v := range got {
+		if v != i {
+			t.Errorf("got[%d] = %d, want %d", i, v, i)
+		}
+	}
+}
+
 func TestCheckClosed_OpenChannel(t *testing.T) {
 	ch := make(chan int, 1)
 	ch <- 42
@@ -34,22 +51,5 @@ func TestCheckClosed_ClosedChannel(t *testing.T) {
 	v, ok := CheckClosed(ch)
 	if ok || v != 0 {
 		t.Errorf("CheckClosed = (%d, %v), want (0, false) for closed channel", v, ok)
-	}
-}
-
-func TestGenerate_Take(t *testing.T) {
-	done := make(chan struct{})
-	nums := Generate(done)
-
-	got := Take(nums, 5)
-	close(done)
-
-	if len(got) != 5 {
-		t.Fatalf("Take returned %d items, want 5", len(got))
-	}
-	for i, v := range got {
-		if v != i {
-			t.Errorf("got[%d] = %d, want %d", i, v, i)
-		}
 	}
 }

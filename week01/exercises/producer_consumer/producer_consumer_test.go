@@ -7,6 +7,8 @@ import (
 
 func TestRun_TotalResults(t *testing.T) {
 	// 2 producers × 5 tasks = 10 total results
+	// 3 consumers should be able to handle this easily.
+	// 10 buffer size is sufficient to avoid blocking producers.
 	results := Run(2, 5, 3, 10, 0)
 	if len(results) != 10 {
 		t.Errorf("expected 10 results, got %d", len(results))

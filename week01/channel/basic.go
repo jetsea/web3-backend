@@ -1,6 +1,10 @@
 // Package channel demonstrates Go channel patterns.
 package channel
 
+import (
+	"log/slog"
+)
+
 // SendAndReceive shows the most basic unbuffered channel usage:
 // the sender blocks until the receiver is ready, and vice-versa.
 func SendAndReceive(value int) int {
@@ -22,6 +26,7 @@ func Pipeline(input int) int {
 		out := make(chan int)
 		go func() {
 			out <- (<-in) * 2
+
 			close(out)
 		}()
 		return out
@@ -30,8 +35,11 @@ func Pipeline(input int) int {
 	addOne := func(in <-chan int) <-chan int {
 		out := make(chan int)
 		go func() {
-			out <- <-in + 1
+			slog.Info("addOne: sending value...")
+			out <- (<-in) + 1
+			slog.Info("addOne: closing channel...")
 			close(out)
+			slog.Info("addOne: channel closed")
 		}()
 		return out
 	}
@@ -40,5 +48,8 @@ func Pipeline(input int) int {
 	src <- input
 	close(src)
 
-	return <-addOne(double(src))
+	doubled := double(src)
+	slog.Info("Main: waiting for result...")
+	added := addOne(doubled)
+	return <-added
 }

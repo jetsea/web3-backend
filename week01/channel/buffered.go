@@ -1,13 +1,26 @@
 package channel
 
-// BufferedFill sends n integers into a buffered channel and returns it.
-// Because the channel is buffered, the sends do not block.
+// Fill the channel completely in one go.
+// When data is smaller than the chan capacity, use this!
 func BufferedFill(n int) <-chan int {
 	ch := make(chan int, n)
 	for i := 0; i < n; i++ {
 		ch <- i
 	}
 	close(ch)
+	return ch
+}
+
+// continuously sends values 0..n-1 to a buffered channel with capacity cap.
+// When data is bigger than the chan capacity, use this!
+func BoundedProducer(n, cap int) <-chan int {
+	ch := make(chan int, cap)
+	go func() {
+		for i := 0; i < n; i++ {
+			ch <- i
+		}
+		close(ch)
+	}()
 	return ch
 }
 
@@ -18,18 +31,4 @@ func Drain(ch <-chan int) []int {
 		out = append(out, v)
 	}
 	return out
-}
-
-// BoundedProducer sends values 0..n-1 into a buffered channel of
-// capacity cap, then closes it.  Use a separate goroutine so the
-// caller controls when to start consuming.
-func BoundedProducer(n, cap int) <-chan int {
-	ch := make(chan int, cap)
-	go func() {
-		for i := 0; i < n; i++ {
-			ch <- i
-		}
-		close(ch)
-	}()
-	return ch
 }

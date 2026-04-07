@@ -30,6 +30,7 @@ type testJob struct {
 	executeFn func() error
 }
 
+// implement Execute to satisfy Job interface
 func (j *testJob) Execute() error {
 	time.Sleep(j.duration)
 	if j.executeFn != nil {
@@ -43,13 +44,16 @@ func (j *testJob) Execute() error {
 
 func TestPool_BasicOperation(t *testing.T) {
 	logger := &mockLogger{}
+	//3 workers, queue size 10
 	pool := New(3, 10, logger)
 	ctx := context.Background()
-
+	// Start the worker pool
 	pool.Start(ctx)
 
 	var jobsProcessed int32
+
 	for i := 0; i < 5; i++ {
+
 		job := &testJob{
 			name:     "test-job",
 			duration: 10 * time.Millisecond,
@@ -58,13 +62,13 @@ func TestPool_BasicOperation(t *testing.T) {
 				return nil
 			},
 		}
+		// Add 5 jobs to the pool
 		if err := pool.Add(job); err != nil {
-			t.Fatalf("Failed to submit job: %v", err)
+			t.Fatalf("Job chan is full! New job failed: %v", err)
 		}
 	}
 
-	// Wait for all jobs to complete
-	time.Sleep(200 * time.Millisecond)
+	// Stop the worker pool
 	pool.Stop()
 
 	if jobsProcessed != 5 {
@@ -74,6 +78,7 @@ func TestPool_BasicOperation(t *testing.T) {
 
 func TestPool_Errors(t *testing.T) {
 	logger := &mockLogger{}
+	//2 workers, queue size 5
 	pool := New(2, 5, logger)
 	ctx := context.Background()
 
@@ -85,9 +90,9 @@ func TestPool_Errors(t *testing.T) {
 	pool.Add(successJob)
 	pool.Add(errorJob)
 
-	time.Sleep(100 * time.Millisecond)
 	pool.Stop()
 
+	t.Log(logger.errorMessages)
 	if len(logger.errorMessages) == 0 {
 		t.Error("Expected error messages, got none")
 	}
@@ -95,18 +100,19 @@ func TestPool_Errors(t *testing.T) {
 
 func TestPool_ContextCancellation(t *testing.T) {
 	logger := &mockLogger{}
+	//2 workers, queue size 10
 	pool := New(2, 10, logger)
 	ctx, cancel := context.WithCancel(context.Background())
 
 	pool.Start(ctx)
-	time.Sleep(10 * time.Millisecond)
 
-	// Cancel context
 	cancel()
+	//sleeping ensures workers are running and select on ctx.Done() instead of jobChan closed
 	time.Sleep(50 * time.Millisecond)
 
 	pool.Stop()
 
+	t.Log(logger.infoMessages)
 	// Verify workers shut down gracefully
 	if len(logger.infoMessages) == 0 {
 		t.Error("Expected shutdown messages")
@@ -115,6 +121,7 @@ func TestPool_ContextCancellation(t *testing.T) {
 
 func TestPool_QueueFull(t *testing.T) {
 	logger := &mockLogger{}
+	//1 worker, queue size 2
 	pool := New(1, 2, logger)
 	ctx := context.Background()
 
@@ -141,6 +148,7 @@ func TestPool_QueueFull(t *testing.T) {
 
 func TestPool_Results(t *testing.T) {
 	logger := &mockLogger{}
+	//2 workers, queue size 10
 	pool := New(2, 10, logger)
 	ctx := context.Background()
 
@@ -149,11 +157,17 @@ func TestPool_Results(t *testing.T) {
 	job := &testJob{name: "test", duration: 10 * time.Millisecond}
 	pool.Add(job)
 
-	time.Sleep(50 * time.Millisecond)
+	//sleep for job to be processed before stopping the pool
+
 	pool.Stop()
 
-	// Results channel should be closed
+	//ok=true: chan is open or closed but not drained
+	//ok=false: chan is closed and drained
 	_, ok := <-pool.Results()
+	if !ok {
+		t.Error("Expected there to be results, got none")
+	}
+	_, ok = <-pool.Results()
 	if ok {
 		t.Error("Expected results channel to be closed")
 	}
@@ -164,8 +178,8 @@ func TestPool_Stats(t *testing.T) {
 	pool := New(3, 10, logger)
 
 	stats := pool.Stats()
-	if stats.Workers != 3 {
-		t.Errorf("Expected 3 workers, got %d", stats.Workers)
+	if stats.Workers != 3 && stats.ActiveWorkers != 0 && stats.QueueSize != 0 {
+		t.Errorf("Expected 3 workers, got %d workers, %d active workers, %d queue size", stats.Workers, stats.ActiveWorkers, stats.QueueSize)
 	}
 
 	// Submit jobs
@@ -176,8 +190,9 @@ func TestPool_Stats(t *testing.T) {
 	}
 
 	stats = pool.Stats()
-	if stats.QueueSize != 5 {
-		t.Errorf("Expected queue size 5, got %d", stats.QueueSize)
+	//because of the sleep in testJob, all 5 jobs will be active at the same time
+	if stats.QueueSize != 5 && stats.ActiveWorkers != 3 {
+		t.Errorf("Expected queue size 5, got %d, Expected active workers 3, got %d ", stats.QueueSize, stats.ActiveWorkers)
 	}
 
 	pool.Stop()

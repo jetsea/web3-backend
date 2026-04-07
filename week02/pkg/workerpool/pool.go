@@ -1,5 +1,6 @@
 package workerpool
 
+//concurrent worker pool implementation with job queue, result collection, and graceful shutdown
 import (
 	"context"
 	"errors"
@@ -11,12 +12,15 @@ import (
 // ErrQueueFull is returned when the job queue is at capacity
 var ErrQueueFull = errors.New("job queue is full")
 
-// Job represents a unit of work to be processed
 type Job interface {
 	Execute() error
 }
 
-// Result represents the outcome of a job execution
+type Logger interface {
+	Info(msg string, fields ...interface{})
+	Error(msg string, fields ...interface{})
+}
+
 type Result struct {
 	JobID     string
 	Success   bool
@@ -25,7 +29,6 @@ type Result struct {
 	Timestamp time.Time
 }
 
-// Pool implements a worker pool for concurrent job processing
 type Pool struct {
 	workers        int
 	jobChan        chan Job
@@ -35,13 +38,8 @@ type Pool struct {
 	runningWorkers int32
 }
 
-// Logger defines the logging interface
-type Logger interface {
-	Info(msg string, fields ...interface{})
-	Error(msg string, fields ...interface{})
-}
+//lifecycle: create pool -> start workers -> add jobs -> collect results -> stop pool
 
-// New creates a new worker pool
 func New(workerCount, queueSize int, logger Logger) *Pool {
 	return &Pool{
 		workers:    workerCount,
@@ -51,7 +49,7 @@ func New(workerCount, queueSize int, logger Logger) *Pool {
 	}
 }
 
-// Start begins processing jobs with the worker pool
+// Start processing jobs with the worker pool
 func (p *Pool) Start(ctx context.Context) {
 	for i := 0; i < p.workers; i++ {
 		p.wg.Add(1)

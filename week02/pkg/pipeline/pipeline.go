@@ -7,6 +7,13 @@ import (
 // Stage represents a single processing stage in the pipeline
 type Stage[T any] func(ctx context.Context, input T) (T, error)
 
+// StageError represents an error that occurred in a specific stage
+type StageError struct {
+	Stage int
+	Err   error
+}
+type FilterError string
+
 // Pipeline represents a data processing pipeline
 type Pipeline[T any] struct {
 	stages []Stage[T]
@@ -23,30 +30,20 @@ func New[T any](stages ...Stage[T]) *Pipeline[T] {
 func (p *Pipeline[T]) Execute(ctx context.Context, input T) (T, error) {
 	var err error
 	current := input
-
+	var zero T
 	for i, stage := range p.stages {
 		select {
 		case <-ctx.Done():
-			var zero T
 			return zero, ctx.Err()
 		default:
 			current, err = stage(ctx, current)
 			if err != nil {
-				var zero T
 				return zero, StageError{Stage: i, Err: err}
 			}
 		}
 	}
 
 	return current, nil
-}
-
-// ExecuteConcurrent runs the pipeline with the given input, running stages concurrently
-// when possible (independent stages can run in parallel)
-func (p *Pipeline[T]) ExecuteConcurrent(ctx context.Context, input T) (T, error) {
-	// For simplicity, sequential execution. In production, you would
-	// analyze stage dependencies and run independent stages concurrently
-	return p.Execute(ctx, input)
 }
 
 // AddStage adds a new stage to the pipeline
@@ -58,12 +55,6 @@ func (p *Pipeline[T]) AddStage(stage Stage[T]) *Pipeline[T] {
 // StageCount returns the number of stages in the pipeline
 func (p *Pipeline[T]) StageCount() int {
 	return len(p.stages)
-}
-
-// StageError represents an error that occurred in a specific stage
-type StageError struct {
-	Stage int
-	Err   error
 }
 
 func (e StageError) Error() string {
@@ -117,9 +108,6 @@ func Batch[T any](p *Pipeline[T], ctx context.Context, inputs []T) ([]T, error) 
 
 	return results, nil
 }
-
-// FilterError is returned when input is filtered out
-type FilterError string
 
 func (e FilterError) Error() string {
 	return string(e)

@@ -3,6 +3,7 @@ package pipeline
 import (
 	"context"
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 )
@@ -143,6 +144,9 @@ func TestPipeline_Batch(t *testing.T) {
 		func(ctx context.Context, input int) (int, error) {
 			return input * 2, nil
 		},
+		func(ctx context.Context, input int) (int, error) {
+			return input + 10, nil
+		},
 	}
 
 	p := New(stages...)
@@ -154,7 +158,7 @@ func TestPipeline_Batch(t *testing.T) {
 		t.Fatalf("Batch failed: %v", err)
 	}
 
-	expected := []int{2, 4, 6, 8, 10}
+	expected := []int{12, 14, 16, 18, 20}
 	for i, result := range results {
 		if result != expected[i] {
 			t.Errorf("Index %d: expected %d, got %d", i, expected[i], result)
@@ -163,6 +167,9 @@ func TestPipeline_Batch(t *testing.T) {
 }
 
 func TestPipeline_Filter(t *testing.T) {
+	// Create a pipeline that has 2 stages:
+	// a filter that only allows positive numbers,
+	// and a stage that multiplies the input by 2
 	p := New[int](
 		Filter(func(n int) bool { return n > 0 }),
 		func(ctx context.Context, input int) (int, error) {
@@ -182,6 +189,7 @@ func TestPipeline_Filter(t *testing.T) {
 
 	// Negative number should be filtered
 	_, err = p.Execute(ctx, -5)
+	t.Logf("Filter error: %v", err)
 	if err == nil {
 		t.Fatal("Expected filter error, got nil")
 	}
@@ -247,5 +255,80 @@ func TestPipeline_StructProcessing(t *testing.T) {
 	}
 	if result.Name != "Mr. John" {
 		t.Errorf("Expected name %q, got %q", "Mr. John", result.Name)
+	}
+}
+
+func TestMap(t *testing.T) {
+	// Test Map function with pipeline integration
+	ctx := context.Background()
+
+	// Create a pipeline that processes integers
+	intPipeline := New(
+		func(ctx context.Context, input int) (int, error) {
+			return input * 2, nil
+		},
+		func(ctx context.Context, input int) (int, error) {
+			return input + 10, nil
+		},
+	)
+
+	// Use Map to convert int result to string
+	intToString := Map(func(i int) string {
+		return fmt.Sprintf("Processed: %d", i)
+	})
+
+	// Execute pipeline and then use Map for type conversion
+	intResult, err := intPipeline.Execute(ctx, 5)
+	if err != nil {
+		t.Fatalf("Pipeline execution failed: %v", err)
+	}
+
+	// Convert pipeline result to string using Map
+	strResult, err := intToString(ctx, intResult)
+	if err != nil {
+		t.Errorf("Map failed: %v", err)
+	}
+
+	expected := "Processed: 20" // (5 * 2) + 10 = 20
+	if strResult != expected {
+		t.Errorf("Expected %q, got %q", expected, strResult)
+	}
+
+	// Test Map with struct transformation in pipeline workflow
+
+	type Person struct {
+		Name string
+		Age  int
+	}
+
+	// Create a pipeline that processes Person structs
+	personPipeline := New(
+		func(ctx context.Context, p Person) (Person, error) {
+			p.Age += 1
+			return p, nil
+		},
+	)
+
+	// Use Map to convert Person to string representation
+	personToString := Map(func(p Person) string {
+		return fmt.Sprintf("%s is %d years old", p.Name, p.Age)
+	})
+
+	// Execute pipeline and then use Map for type conversion
+	inputPerson := Person{Name: "Alice", Age: 30}
+	personResult, err := personPipeline.Execute(ctx, inputPerson)
+	if err != nil {
+		t.Fatalf("Pipeline execution failed: %v", err)
+	}
+
+	// Convert pipeline result to string using Map
+	personStrResult, err := personToString(ctx, personResult)
+	if err != nil {
+		t.Errorf("Map failed: %v", err)
+	}
+
+	expectedPersonStr := "Alice is 31 years old"
+	if personStrResult != expectedPersonStr {
+		t.Errorf("Expected %q, got %q", expectedPersonStr, personStrResult)
 	}
 }

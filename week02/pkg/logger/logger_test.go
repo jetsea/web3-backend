@@ -21,6 +21,7 @@ func TestNewDevelopment(t *testing.T) {
 	if logger == nil {
 		t.Fatal("Expected non-nil logger")
 	}
+	logger.Debug("development log", String("development", "value"))
 }
 
 // TestNewProduction tests creating a production logger
@@ -36,7 +37,7 @@ func TestNewProduction(t *testing.T) {
 		t.Fatal("Expected non-nil logger")
 	}
 
-	logger.Info("production log", String("test", "value"))
+	logger.Info("production log", String("production", "value"))
 }
 
 // TestNewNop tests creating a no-op logger
@@ -54,15 +55,18 @@ func TestNewNop(t *testing.T) {
 // TestLogger_With tests creating child logger with fields
 func TestLogger_With(t *testing.T) {
 	logger, _ := NewDevelopment()
-	defer logger.Sync()
 
-	childLogger := logger.With(String("service", "test"), Int("version", 1))
+	childLogger := logger.With(
+		String("service", "test"),
+		Int("version", 1),
+	)
 
 	if childLogger == nil {
 		t.Fatal("Expected non-nil child logger")
 	}
 
 	childLogger.Info("child logger message")
+
 }
 
 // TestLoggingLevels tests different log levels
@@ -70,9 +74,11 @@ func TestLoggingLevels(t *testing.T) {
 	// Create a custom core that captures log entries
 	encoderConfig := zap.NewDevelopmentEncoderConfig()
 	encoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
-	encoder := zapcore.NewJSONEncoder(encoderConfig)
+	//1st step: set format for logging
+	encoder := zapcore.NewJSONEncoder(encoderConfig) //json format logging
 
 	var buf bytes.Buffer
+	//2ed step: set output for logging
 	writeSyncer := zapcore.AddSync(&buf)
 	core := zapcore.NewCore(encoder, writeSyncer, zapcore.DebugLevel)
 
@@ -82,13 +88,15 @@ func TestLoggingLevels(t *testing.T) {
 		sugar:  logger.Sugar(),
 	}
 	defer wrappedLogger.Sync()
-
+	//3rd step: set level for logging
 	wrappedLogger.Debug("debug message", String("key", "debug"))
 	wrappedLogger.Info("info message", String("key", "info"))
 	wrappedLogger.Warn("warn message", String("key", "warn"))
 	wrappedLogger.Error("error message", String("key", "error"))
 
 	output := buf.String()
+	t.Logf("Captured log output:\n%s", output)
+
 	if output == "" {
 		t.Error("Expected log output, got empty string")
 	}
@@ -123,19 +131,6 @@ func TestNamed(t *testing.T) {
 	}
 }
 
-// TestWithFields tests With method chaining
-func TestWithFields(t *testing.T) {
-	logger, _ := NewDevelopment()
-	defer logger.Sync()
-
-	fieldLogger := logger.With(
-		String("component", "test"),
-		Int("iteration", 1),
-	)
-
-	fieldLogger.Info("message with fields")
-}
-
 // TestFieldConstructors tests field constructors
 func TestFieldConstructors(t *testing.T) {
 	tests := []struct {
@@ -149,12 +144,15 @@ func TestFieldConstructors(t *testing.T) {
 		{"Bool", Bool("key", true)},
 		{"Any", Any("key", "anyValue")},
 		{"Err", Err(errors.New("test"))},
+		{"Duration", Duration("elapsed", 150*time.Millisecond)},
+		{"Time", Time("created_at", time.Now())},
 	}
 
 	logger, _ := NewDevelopment()
 	defer logger.Sync()
 
 	for _, tt := range tests {
+		//run every single test case
 		t.Run(tt.name, func(t *testing.T) {
 			logger.Info("test", tt.field)
 		})
@@ -205,29 +203,6 @@ func TestErrorLogging(t *testing.T) {
 	)
 }
 
-// TestDurationField tests duration field
-func TestDurationField(t *testing.T) {
-	logger, _ := NewDevelopment()
-	defer logger.Sync()
-
-	duration := 150 * time.Millisecond
-	logger.Info("operation completed",
-		Duration("elapsed", duration),
-		Int("items_processed", 100),
-	)
-}
-
-// TestTimeField tests time field
-func TestTimeField(t *testing.T) {
-	logger, _ := NewDevelopment()
-	defer logger.Sync()
-
-	now := time.Now()
-	logger.Info("timestamp test",
-		Time("created_at", now),
-	)
-}
-
 // TestWithChainedFields tests chaining With calls
 func TestWithChainedFields(t *testing.T) {
 	logger, _ := NewDevelopment()
@@ -262,4 +237,19 @@ func TestLoggerSync(t *testing.T) {
 	if err != nil {
 		t.Errorf("Sync failed: %v", err)
 	}
+}
+
+// TestSugarLogger tests the sugared logger functionality
+func TestSugarLogger(t *testing.T) {
+	logger, err := NewDevelopment()
+	if err != nil {
+		t.Fatalf("Failed to create development logger: %v", err)
+	}
+	defer func() { _ = logger.Sync() }()
+
+	// Test sugar logger functionality
+	// This is just an example - in a real test, you would capture the output
+	// and verify it contains the expected values
+	logger.sugar.Infof("Sugared info message: %s", "test value")
+	logger.sugar.Errorf("Sugared error message: %v", errors.New("test error"))
 }

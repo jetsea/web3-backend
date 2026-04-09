@@ -11,7 +11,7 @@ import (
 // Logger wraps zap.Logger with structured logging capabilities
 type Logger struct {
 	logger *zap.Logger
-	sugar  *zap.SugaredLogger
+	sugar  *zap.SugaredLogger //for fmt-style logging
 }
 
 // Config represents logger configuration
@@ -36,7 +36,7 @@ func New(config Config) (*Logger, error) {
 		zapConfig.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 	}
 
-	// Set log level
+	// Set log level if specified
 	if config.Level != "" {
 		if err := zapConfig.Level.UnmarshalText([]byte(config.Level)); err != nil {
 			return nil, fmt.Errorf("invalid log level: %w", err)
@@ -44,8 +44,8 @@ func New(config Config) (*Logger, error) {
 	}
 
 	logger, err := zapConfig.Build(
-		zap.AddCaller(),
-		zap.AddCallerSkip(1),
+		zap.AddCaller(),      // Include caller info
+		zap.AddCallerSkip(1), //skip our logger wrapper(the first level)
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to build logger: %w", err)
@@ -74,7 +74,7 @@ func NewProduction(outputPath string) (*Logger, error) {
 	})
 }
 
-// NewNop creates a no-op logger for testing
+// NewNop creates an "empty" logger for testing
 func NewNop() *Logger {
 	logger := zap.NewNop()
 	return &Logger{
@@ -84,60 +84,48 @@ func NewNop() *Logger {
 }
 
 // With creates a child logger with additional fields
-func (l *Logger) With(fields ...Field) *Logger {
+
+// toZapFields converts []Field to []zap.Field
+func toZapFields(fields []Field) []zap.Field {
 	zapFields := make([]zap.Field, len(fields))
 	for i, f := range fields {
 		zapFields[i] = f.zapField
 	}
+	return zapFields
+}
+
+// create a child logger with additional fields
+// original logger will not be modified
+func (l *Logger) With(fields ...Field) *Logger {
 	return &Logger{
-		logger: l.logger.With(zapFields...),
+		logger: l.logger.With(toZapFields(fields)...),
 		sugar:  l.sugar,
 	}
 }
 
 // Debug logs a message at debug level
 func (l *Logger) Debug(msg string, fields ...Field) {
-	zapFields := make([]zap.Field, len(fields))
-	for i, f := range fields {
-		zapFields[i] = f.zapField
-	}
-	l.logger.Debug(msg, zapFields...)
+	l.logger.Debug(msg, toZapFields(fields)...)
 }
 
 // Info logs a message at info level
 func (l *Logger) Info(msg string, fields ...Field) {
-	zapFields := make([]zap.Field, len(fields))
-	for i, f := range fields {
-		zapFields[i] = f.zapField
-	}
-	l.logger.Info(msg, zapFields...)
+	l.logger.Info(msg, toZapFields(fields)...)
 }
 
 // Warn logs a message at warning level
 func (l *Logger) Warn(msg string, fields ...Field) {
-	zapFields := make([]zap.Field, len(fields))
-	for i, f := range fields {
-		zapFields[i] = f.zapField
-	}
-	l.logger.Warn(msg, zapFields...)
+	l.logger.Warn(msg, toZapFields(fields)...)
 }
 
 // Error logs a message at error level
 func (l *Logger) Error(msg string, fields ...Field) {
-	zapFields := make([]zap.Field, len(fields))
-	for i, f := range fields {
-		zapFields[i] = f.zapField
-	}
-	l.logger.Error(msg, zapFields...)
+	l.logger.Error(msg, toZapFields(fields)...)
 }
 
 // Fatal logs a message at fatal level and exits
 func (l *Logger) Fatal(msg string, fields ...Field) {
-	zapFields := make([]zap.Field, len(fields))
-	for i, f := range fields {
-		zapFields[i] = f.zapField
-	}
-	l.logger.Fatal(msg, zapFields...)
+	l.logger.Fatal(msg, toZapFields(fields)...)
 }
 
 // Sync flushes any buffered log entries

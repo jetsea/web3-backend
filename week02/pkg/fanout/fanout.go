@@ -6,6 +6,7 @@ import (
 )
 
 // FanOut distributes input to multiple workers concurrently
+// e.g. querying multiple databases or exchanges
 func FanOut[T any, R any](
 	ctx context.Context,
 	input T,
@@ -33,6 +34,7 @@ func FanOut[T any, R any](
 }
 
 // FanIn aggregates results from multiple channels
+// e.g. collecting results from multiple exchanges or databases
 func FanIn[T any](ctx context.Context, channels ...<-chan Result[T]) <-chan Result[T] {
 	out := make(chan Result[T], len(channels))
 	var wg sync.WaitGroup
@@ -42,9 +44,13 @@ func FanIn[T any](ctx context.Context, channels ...<-chan Result[T]) <-chan Resu
 	for _, ch := range channels {
 		go func(c <-chan Result[T]) {
 			defer wg.Done()
-			for result := range c {
+			for {
 				select {
-				case out <- result:
+				case result, ok := <-c:
+					if !ok {
+						return
+					}
+					out <- result
 				case <-ctx.Done():
 					return
 				}

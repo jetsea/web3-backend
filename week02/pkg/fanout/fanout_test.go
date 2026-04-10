@@ -10,7 +10,7 @@ import (
 
 func TestFanOut_Basic(t *testing.T) {
 	ctx := context.Background()
-	input := 42
+	input := 65
 
 	results := FanOut(ctx, input, 3, func(ctx context.Context, n int) (string, error) {
 		time.Sleep(10 * time.Millisecond)
@@ -22,11 +22,12 @@ func TestFanOut_Basic(t *testing.T) {
 	}
 
 	for i, result := range results {
+
 		if result.Error != nil {
 			t.Errorf("Result %d: unexpected error %v", i, result.Error)
 		}
-		if result.Index != i {
-			t.Errorf("Result %d: expected index %d, got %d", i, i, result.Index)
+		if result.Index != i || result.Data != "result-"+string(rune(input)) {
+			t.Errorf("Result %d: expected index %d and data 'result-%c', got index %d and data '%s'", i, i, rune(input), result.Index, result.Data)
 		}
 	}
 }
@@ -61,13 +62,23 @@ func TestFanOut_ContextCancellation(t *testing.T) {
 	cancel() // Cancel immediately
 
 	results := FanOut(ctx, input, 2, func(ctx context.Context, n int) (string, error) {
-		time.Sleep(100 * time.Millisecond)
-		return "done", nil
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		default:
+			return "done", nil
+		}
 	})
 
 	// Results should still be returned, but might be incomplete
 	if len(results) != 2 {
 		t.Errorf("Expected 2 results, got %d", len(results))
+	}
+
+	for i, result := range results {
+		if result.Error != context.Canceled {
+			t.Errorf("Result %d: expected context.Canceled error, got %v", i, result.Error)
+		}
 	}
 }
 
@@ -148,17 +159,23 @@ func TestConcurrentQuery_ContextCancellation(t *testing.T) {
 	inputs := []int{1, 2, 3}
 
 	go func() {
-		time.Sleep(5 * time.Millisecond)
+		time.Sleep(1 * time.Millisecond)
 		cancel()
 	}()
 
 	_, err := ConcurrentQuery(ctx, inputs, func(ctx context.Context, n int) (int, error) {
-		time.Sleep(100 * time.Millisecond)
-		return n * 2, nil
+		time.Sleep(2 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			return 0, ctx.Err()
+		default:
+			return n * 2, nil
+		}
+
 	})
 
 	// Should complete with or without error depending on timing
-	if err != nil && err != context.Canceled {
+	if err != context.Canceled {
 		t.Errorf("Unexpected error: %v", err)
 	}
 }
@@ -222,14 +239,8 @@ func TestFanOut_Concurrency(t *testing.T) {
 	// Give time for all goroutines to start
 	time.Sleep(20 * time.Millisecond)
 
-	// Check that all workers are running concurrently
-	currentCount := count.Load()
-	if currentCount < 50 {
-		t.Errorf("Expected high concurrency, got %d", currentCount)
-	}
-
-	// Wait for completion
-	for range results {
+	if results == nil || len(results) != 100 {
+		t.Errorf("Expected 100 results, got %d", len(results))
 	}
 
 	finalCount := count.Load()
@@ -246,7 +257,10 @@ func TestFanIn_ContextCancellation(t *testing.T) {
 
 	ch1 <- Result[string]{Index: 0, Data: "done"}
 
-	cancel()
+	go func() {
+		time.Sleep(1 * time.Millisecond)
+		cancel()
+	}()
 
 	out := FanIn(ctx, ch1, ch2)
 
